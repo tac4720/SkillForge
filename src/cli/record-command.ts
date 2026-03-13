@@ -22,6 +22,140 @@ export interface RecordResult {
   warnings: string[];
 }
 
+const CLICK_LISTENER_SCRIPT = `
+(function() {
+  if (window.__skillforge_click_installed) return;
+  window.__skillforge_click_installed = true;
+
+  function buildCandidates(clicked, semantic) {
+    var candidates = [];
+    var targets = semantic && semantic !== clicked ? [clicked, semantic] : [clicked];
+
+    for (var i = 0; i < targets.length; i++) {
+      var el = targets[i];
+      if (!el || !el.tagName) continue;
+
+      // id
+      if (el.id) {
+        candidates.push('css=#' + el.id);
+      }
+      // data-testid
+      var testId = el.getAttribute && el.getAttribute('data-testid');
+      if (testId) {
+        candidates.push('css=[data-testid="' + testId + '"]');
+      }
+      // name attribute
+      var name = el.getAttribute && el.getAttribute('name');
+      if (name) {
+        candidates.push('css=[name="' + name + '"]');
+      }
+      // aria-label
+      var ariaLabel = el.getAttribute && el.getAttribute('aria-label');
+      if (ariaLabel) {
+        var tag = el.tagName.toLowerCase();
+        var role = tag === 'button' ? 'button' : (tag === 'a' ? 'link' : el.getAttribute('role'));
+        if (role) {
+          candidates.push('role=' + role + '[name="' + ariaLabel + '"]');
+        }
+      }
+      // CSS class selector (prefer BEM-style or descriptive classes)
+      if (el.classList && el.classList.length > 0) {
+        for (var c = 0; c < el.classList.length; c++) {
+          var cls = el.classList[c];
+          if (cls.length > 2 && !/^(active|show|hide|open|closed|visible|hidden|disabled|enabled|selected|focused)$/i.test(cls)) {
+            candidates.push('css=.' + cls);
+            break;
+          }
+        }
+      }
+      // Direct text of element (not descendants) — for short labels
+      var directText = '';
+      for (var n = el.firstChild; n; n = n.nextSibling) {
+        if (n.nodeType === 3) directText += n.textContent;
+      }
+      directText = directText.trim();
+      if (directText.length > 0 && directText.length <= 40) {
+        candidates.push('text=' + JSON.stringify(directText));
+      }
+    }
+
+    // Deduplicate
+    var seen = {};
+    var unique = [];
+    for (var j = 0; j < candidates.length; j++) {
+      if (!seen[candidates[j]]) {
+        seen[candidates[j]] = true;
+        unique.push(candidates[j]);
+      }
+    }
+    return unique;
+  }
+
+  document.addEventListener('click', function(e) {
+    var clicked = e.target;
+    // Walk up to find semantic parent (button, link, role=button)
+    var semantic = clicked;
+    while (semantic && semantic !== document) {
+      if (semantic.tagName === 'A' || semantic.tagName === 'BUTTON' || (semantic.getAttribute && semantic.getAttribute('role') === 'button') || semantic.onclick) break;
+      semantic = semantic.parentElement;
+    }
+    if (!semantic || semantic === document) semantic = clicked;
+
+    var candidates = buildCandidates(clicked, semantic);
+    if (candidates.length === 0) {
+      var tag = (semantic.tagName || 'unknown').toLowerCase();
+      candidates = [tag];
+    }
+
+    if (!window.__skillforge_click_queue) window.__skillforge_click_queue = [];
+    window.__skillforge_click_queue.push(candidates);
+  }, true);
+})();
+`;
+
+const INPUT_LISTENER_SCRIPT = `
+(function() {
+  if (window.__skillforge_input_installed) return;
+  window.__skillforge_input_installed = true;
+  window.__skillforge_pending_inputs = {};
+  document.addEventListener('input', function(e) {
+    var target = e.target;
+    var selector = '';
+    if (target.id) {
+      selector = '#' + target.id;
+    } else if (target.getAttribute && target.getAttribute('name')) {
+      selector = '[name="' + target.getAttribute('name') + '"]';
+    } else {
+      selector = (target.tagName || 'input').toLowerCase();
+    }
+    window.__skillforge_pending_inputs[selector] = {
+      selector: selector,
+      value: target.value || '',
+      type: (target.type || '').toLowerCase()
+    };
+  }, true);
+  document.addEventListener('change', function(e) {
+    var target = e.target;
+    var selector = '';
+    if (target.id) {
+      selector = '#' + target.id;
+    } else if (target.getAttribute && target.getAttribute('name')) {
+      selector = '[name="' + target.getAttribute('name') + '"]';
+    } else {
+      selector = (target.tagName || 'input').toLowerCase();
+    }
+    var tag = (target.tagName || '').toLowerCase();
+    if (tag === 'select') {
+      window.__skillforge_pending_inputs[selector] = {
+        selector: selector,
+        value: target.value || '',
+        type: 'select'
+      };
+    }
+  }, true);
+})();
+`;
+
 export async function recordCommand(options: RecordOptions): Promise<RecordResult> {
   const skillName = options.name ?? deriveSkillName(options.url);
   const outDir = options.outDir ?? path.join(options.cwd, skillName);
@@ -103,6 +237,15 @@ async function attachCdpRecorder(
   await cdp.send("DOM.enable");
   await cdp.send("Runtime.enable");
 
+  // Inject scripts on every new document (survives page navigations)
+  await cdp.send("Page.enable");
+  await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
+    source: CLICK_LISTENER_SCRIPT + "\n" + INPUT_LISTENER_SCRIPT
+  });
+
+  // Also inject into the current page immediately
+  await cdp.send("Runtime.evaluate", { expression: CLICK_LISTENER_SCRIPT + "\n" + INPUT_LISTENER_SCRIPT });
+
   page.on("framenavigated", (frame) => {
     if (frame === page.mainFrame()) {
       recorder.recordNavigate(sessionId, frame.url());
@@ -114,128 +257,62 @@ async function attachCdpRecorder(
     recorder.recordDownload(sessionId, fileName);
   });
 
-  await installClickListener(cdp, sessionId, recorder, page);
-  await installInputListener(cdp, sessionId, recorder, page);
+  startClickPoller(cdp, sessionId, recorder, page);
+  startInputPoller(cdp, sessionId, recorder, page);
 }
 
-async function installClickListener(
+function startClickPoller(
   cdp: CDPSession,
   sessionId: string,
   recorder: BrowserRecorder,
   page: Page
-): Promise<void> {
-  await cdp.send("Runtime.evaluate", {
-    expression: `
-      (function() {
-        if (window.__skillforge_click_installed) return;
-        window.__skillforge_click_installed = true;
-        document.addEventListener('click', function(e) {
-          var target = e.target;
-          var selector = '';
-          if (target.id) {
-            selector = '#' + target.id;
-          } else if (target.getAttribute && target.getAttribute('name')) {
-            selector = '[name="' + target.getAttribute('name') + '"]';
-          } else if (target.getAttribute && target.getAttribute('data-testid')) {
-            selector = '[data-testid="' + target.getAttribute('data-testid') + '"]';
-          } else {
-            var tag = target.tagName ? target.tagName.toLowerCase() : 'unknown';
-            var text = (target.textContent || '').trim().substring(0, 40);
-            if (text) {
-              selector = 'text=' + JSON.stringify(text);
-            } else {
-              selector = tag;
-            }
-          }
-          window.__skillforge_last_click = selector;
-        }, true);
-      })();
-    `
-  });
-
-  const pollClicks = async () => {
+): void {
+  const poll = async () => {
     try {
       const result = await cdp.send("Runtime.evaluate", {
         expression: `
           (function() {
-            var s = window.__skillforge_last_click;
-            window.__skillforge_last_click = null;
-            return s;
+            var q = window.__skillforge_click_queue || [];
+            window.__skillforge_click_queue = [];
+            return JSON.stringify(q);
           })();
         `,
         returnByValue: true
       });
-      const selector = result.result?.value;
-      if (typeof selector === "string" && selector.length > 0) {
-        recorder.recordClick(sessionId, selector);
+      const raw = result.result?.value;
+      if (typeof raw === "string") {
+        const clicks = JSON.parse(raw) as (string | string[])[];
+        for (const entry of clicks) {
+          if (Array.isArray(entry)) {
+            if (entry.length > 0) {
+              recorder.recordClickWithCandidates(sessionId, entry);
+            }
+          } else if (typeof entry === "string" && entry.length > 0) {
+            recorder.recordClick(sessionId, entry);
+          }
+        }
       }
     } catch {
-      return;
+      // page may have been closed
     }
   };
 
-  const interval = setInterval(pollClicks, 200);
+  const interval = setInterval(poll, 150);
   page.on("close", () => clearInterval(interval));
 }
 
-async function installInputListener(
+function startInputPoller(
   cdp: CDPSession,
   sessionId: string,
   recorder: BrowserRecorder,
   page: Page
-): Promise<void> {
-  await cdp.send("Runtime.evaluate", {
-    expression: `
-      (function() {
-        if (window.__skillforge_input_installed) return;
-        window.__skillforge_input_installed = true;
-        window.__skillforge_pending_inputs = {};
-        document.addEventListener('input', function(e) {
-          var target = e.target;
-          var selector = '';
-          if (target.id) {
-            selector = '#' + target.id;
-          } else if (target.getAttribute && target.getAttribute('name')) {
-            selector = '[name="' + target.getAttribute('name') + '"]';
-          } else {
-            selector = (target.tagName || 'input').toLowerCase();
-          }
-          window.__skillforge_pending_inputs[selector] = {
-            selector: selector,
-            value: target.value || '',
-            type: (target.type || '').toLowerCase()
-          };
-        }, true);
-
-        document.addEventListener('change', function(e) {
-          var target = e.target;
-          var selector = '';
-          if (target.id) {
-            selector = '#' + target.id;
-          } else if (target.getAttribute && target.getAttribute('name')) {
-            selector = '[name="' + target.getAttribute('name') + '"]';
-          } else {
-            selector = (target.tagName || 'input').toLowerCase();
-          }
-          var tag = (target.tagName || '').toLowerCase();
-          if (tag === 'select') {
-            window.__skillforge_pending_inputs[selector] = {
-              selector: selector,
-              value: target.value || '',
-              type: 'select'
-            };
-          }
-        }, true);
-      })();
-    `
-  });
-
-  const pollInputs = async () => {
+): void {
+  const poll = async () => {
     try {
       const result = await cdp.send("Runtime.evaluate", {
         expression: `
           (function() {
-            var pending = window.__skillforge_pending_inputs;
+            var pending = window.__skillforge_pending_inputs || {};
             window.__skillforge_pending_inputs = {};
             return JSON.stringify(pending);
           })();
@@ -254,11 +331,11 @@ async function installInputListener(
         }
       }
     } catch {
-      return;
+      // page may have been closed
     }
   };
 
-  const interval = setInterval(pollInputs, 300);
+  const interval = setInterval(poll, 250);
   page.on("close", () => clearInterval(interval));
 }
 

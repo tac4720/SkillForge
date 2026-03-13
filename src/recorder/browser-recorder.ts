@@ -207,6 +207,14 @@ export class BrowserRecorder {
     this.pushEvent(sessionId, { type: "click", locator, selectorCandidates: [locator] });
   }
 
+  recordClickWithCandidates(sessionId: string, candidates: string[]): void {
+    this.pushEvent(sessionId, {
+      type: "click",
+      locator: candidates[0],
+      selectorCandidates: candidates
+    });
+  }
+
   recordInput(sessionId: string, locator: string, value: string, options?: { secret?: boolean }): void {
     const secret = options?.secret ?? isSensitiveLocator(locator);
     this.pushEvent(sessionId, {

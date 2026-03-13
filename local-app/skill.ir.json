@@ -1,0 +1,51 @@
+{
+  "name": "local-app",
+  "version": "0.1.0",
+  "actor": "user",
+  "inputs": {},
+  "permissions": {
+    "browser": {
+      "domains": {
+        "allow": [
+          "http://192.168.33.248:5173"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "id": "step-001",
+      "type": "browser.navigate",
+      "with": {
+        "url": "http://192.168.33.248:5173/"
+      }
+    },
+    {
+      "id": "step-002",
+      "type": "browser.navigate",
+      "with": {
+        "url": "http://192.168.33.248:5173/"
+      }
+    },
+    {
+      "id": "step-003",
+      "type": "browser.click",
+      "target": {
+        "locatorCandidates": [
+          "css=.app-card"
+        ]
+      }
+    },
+    {
+      "id": "step-004",
+      "type": "browser.click",
+      "target": {
+        "locatorCandidates": [
+          "text=\"Monitor\"",
+          "css=.nav-link"
+        ]
+      }
+    }
+  ],
+  "assertions": []
+}

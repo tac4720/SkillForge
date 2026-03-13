@@ -199,6 +199,7 @@ function createHandlers(deps: CliDeps, runtime: CliRuntime): Required<CliDeps> {
         const runtimeDeps = createRuntimeDeps({
           cwd: options.cwd,
           headless: runtime.env.SKILLFORGE_HEADLESS !== "0",
+          slowMo: runtime.env.SKILLFORGE_SLOW_MO ? Number(runtime.env.SKILLFORGE_SLOW_MO) : undefined,
           downloadsDir: runtime.env.SKILLFORGE_DOWNLOADS_DIR,
           storageStatePath: runtime.env.SKILLFORGE_STORAGE_STATE_PATH,
           secretMode: (runtime.env.SKILLFORGE_SECRET_MODE as "env" | "local-vault" | "os-keychain" | undefined) ?? "env",

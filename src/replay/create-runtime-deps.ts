@@ -13,6 +13,7 @@ import { RunLogger } from "./run-logger.ts";
 export function createRuntimeDeps(config: {
   cwd?: string;
   headless?: boolean;
+  slowMo?: number;
   downloadsDir?: string;
   browserType?: "chromium";
   storageStatePath?: string;
@@ -24,6 +25,7 @@ export function createRuntimeDeps(config: {
   const fileSystem = new NodeFileSystem();
   const browserDriver = new PlaywrightBrowserDriver({
     headless: config.headless,
+    slowMo: config.slowMo,
     downloadsDir: config.downloadsDir ?? path.join(cwd, ".skillforge", "downloads"),
     browserType: config.browserType,
     storageStatePath: config.storageStatePath

@@ -31,6 +31,7 @@ class DriverFailure extends Error {
 
 export class PlaywrightBrowserDriver implements BrowserDriver {
   private readonly headless: boolean;
+  private readonly slowMo: number;
   private readonly browserType: "chromium";
   private readonly storageStatePath?: string;
   private downloadsDirPromise: Promise<string>;
@@ -41,11 +42,13 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
 
   constructor(config: {
     headless?: boolean;
+    slowMo?: number;
     downloadsDir?: string;
     browserType?: "chromium";
     storageStatePath?: string;
   } = {}) {
     this.headless = config.headless ?? true;
+    this.slowMo = config.slowMo ?? 0;
     this.browserType = config.browserType ?? "chromium";
     this.storageStatePath = config.storageStatePath;
     this.downloadsDirPromise = config.downloadsDir
@@ -224,6 +227,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
 
     this.browser = await chromium.launch({
       headless: this.headless,
+      slowMo: this.slowMo > 0 ? this.slowMo : undefined,
       downloadsPath: await this.downloadsDirPromise
     });
     this.context = await this.browser.newContext({
@@ -249,9 +253,18 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
     const page = await this.ensurePage();
     const candidates = normalizeCandidates(target);
 
+    // Quick pass: check if any candidate already exists in the DOM
     for (const candidate of candidates) {
       const locator = candidateToLocator(page, candidate).first();
       if (await hasMatch(locator)) {
+        return locator;
+      }
+    }
+
+    // Wait pass: SPA may still be rendering — give each candidate a short wait
+    for (const candidate of candidates) {
+      const locator = candidateToLocator(page, candidate).first();
+      if (await waitForMatch(locator, 3000)) {
         return locator;
       }
     }
@@ -289,7 +302,8 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
 
   private async waitForPotentialNavigation(): Promise<void> {
     const page = await this.ensurePage();
-    await page.waitForLoadState("load", { timeout: 250 }).catch(() => undefined);
+    await page.waitForLoadState("load", { timeout: 1000 }).catch(() => undefined);
+    await page.waitForLoadState("networkidle", { timeout: 1000 }).catch(() => undefined);
   }
 }
 
@@ -306,6 +320,15 @@ function isSkillTarget(value: unknown): value is SkillTarget {
 async function hasMatch(locator: Locator): Promise<boolean> {
   try {
     return (await locator.count()) > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForMatch(locator: Locator, timeoutMs: number): Promise<boolean> {
+  try {
+    await locator.waitFor({ state: "attached", timeout: timeoutMs });
+    return true;
   } catch {
     return false;
   }
