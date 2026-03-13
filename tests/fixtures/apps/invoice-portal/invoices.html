@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Invoices {{month}}</title>
+  </head>
+  <body>
+    <main>
+      <h1>Invoices {{month}}</h1>
+      <p id="delayed-status" hidden>Ready for download</p>
+      <button id="download" onclick="window.location.href='/download?month={{month}}'">Download PDF</button>
+      <button id="{{invoiceDynamicId}}" type="button" data-role="dynamic-download">{{dynamicButtonText}}</button>
+    </main>
+    <script>
+      window.setTimeout(() => {
+        const delayedStatus = document.getElementById("delayed-status");
+        if (delayedStatus) {
+          delayedStatus.hidden = false;
+        }
+      }, 50);
+    </script>
+  </body>
+</html>

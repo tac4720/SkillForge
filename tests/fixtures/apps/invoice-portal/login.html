@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Invoice Portal Login</title>
+  </head>
+  <body>
+    <main>
+      <h1>Login</h1>
+      <form id="login-form" onsubmit="event.preventDefault(); window.location.href='/dashboard';">
+        <label>Email <input id="email" type="email" autocomplete="username" /></label>
+        <label>Password <input id="password" type="password" autocomplete="current-password" /></label>
+        <button id="sign-in" type="submit">Sign in</button>
+      </form>
+    </main>
+  </body>
+</html>

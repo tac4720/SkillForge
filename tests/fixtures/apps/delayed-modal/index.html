@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Delayed Modal Fixture</title>
+  </head>
+  <body>
+    <main>
+      <h1>Delayed Modal</h1>
+      <button id="open-workspace" type="button">Open workspace</button>
+      <div id="unexpected-modal" role="dialog" aria-modal="true" hidden>
+        <p>Unexpected confirmation</p>
+        <button id="dismiss-modal" type="button" onclick="document.getElementById('unexpected-modal').hidden = true">
+          Dismiss
+        </button>
+      </div>
+    </main>
+    <script>
+      const openWorkspace = document.getElementById("open-workspace");
+      if (openWorkspace && {{modalArmed}}) {
+        openWorkspace.addEventListener("click", () => {
+          window.setTimeout(() => {
+            const modal = document.getElementById("unexpected-modal");
+            if (modal) {
+              modal.hidden = false;
+            }
+          }, 50);
+        });
+      }
+    </script>
+  </body>
+</html>

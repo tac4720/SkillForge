@@ -1,0 +1,39 @@
+{
+  "name": "42-preflight",
+  "version": "0.1.0",
+  "actor": "fixture",
+  "inputsSchema": {
+    "repo_dir": {
+      "type": "string"
+    }
+  },
+  "permissions": {
+    "shell": {
+      "allow": [
+        "make"
+      ]
+    },
+    "files": {
+      "read": [
+        "/tmp",
+        "."
+      ]
+    }
+  },
+  "steps": [
+    {
+      "id": "step-make",
+      "type": "shell.exec",
+      "with": {
+        "command": "make",
+        "args": []
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "type": "exitCode",
+      "value": 0
+    }
+  ]
+}

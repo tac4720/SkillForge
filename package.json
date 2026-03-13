@@ -1,0 +1,36 @@
+{
+  "name": "skillforge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "skillforge": "bin/skillforge"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "format": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test:coverage": "vitest run tests/unit tests/property tests/contract tests/component tests/integration tests/security --coverage.enabled true --coverage.provider v8",
+    "test:unit": "vitest run tests/unit",
+    "test:property": "vitest run tests/property",
+    "test:contract": "vitest run tests/contract",
+    "test:component": "vitest run tests/component",
+    "test:integration": "vitest run tests/integration",
+    "test:security": "vitest run tests/security",
+    "test:e2e": "playwright test",
+    "test": "pnpm test:unit && pnpm test:property && pnpm test:contract && pnpm test:component && pnpm test:integration && pnpm test:security && pnpm test:e2e",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@typescript-eslint/parser": "^8.46.3",
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^3.2.0",
+    "eslint": "^9.0.0",
+    "fast-check": "^3.23.2",
+    "playwright": "^1.56.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

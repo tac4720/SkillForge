@@ -1,0 +1,34 @@
+{
+  "name": "website-change-watcher",
+  "version": "0.1.0",
+  "actor": "fixture",
+  "inputsSchema": {
+    "watch_url": {
+      "type": "string"
+    }
+  },
+  "permissions": {
+    "browser": {
+      "domains": {
+        "allow": [
+          "http://127.0.0.1"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "id": "step-watch",
+      "type": "browser.navigate",
+      "with": {
+        "url": "http://127.0.0.1/watch"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "type": "urlMatches",
+      "value": "/watch$"
+    }
+  ]
+}

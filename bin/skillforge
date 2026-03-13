@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export NODE_NO_WARNINGS=1
+node --experimental-strip-types "$SCRIPT_DIR/../src/cli/bin.ts" "$@"
