@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { recordCommand } from "./record-command.ts";
 import { reviewSkillCommand } from "./review-command.ts";
 import { assertValidInputs } from "../core/input-validator.ts";
 import {
@@ -42,6 +43,7 @@ export interface CliRuntime {
 }
 
 const HELP_TEXT = `skillforge init
+skillforge record <url> [--name <name>] [--out-dir <dir>]
 skillforge review <skill>
 skillforge replay <skill>
 skillforge export <skill> --target openclaw
@@ -68,6 +70,33 @@ export async function runCli(
     case "init": {
       await handlers.init();
       return { exitCode: 0, stdout: "initialized", stderr: "" };
+    }
+    case "record": {
+      const url = rest[0];
+      if (!url) {
+        return { exitCode: 1, stdout: "", stderr: "Missing URL argument. Usage: skillforge record <url>" };
+      }
+      const nameIndex = rest.indexOf("--name");
+      const name = nameIndex >= 0 ? rest[nameIndex + 1] : undefined;
+      const outDirIndex = rest.indexOf("--out-dir");
+      const outDir = outDirIndex >= 0 ? rest[outDirIndex + 1] : undefined;
+      try {
+        const result = await recordCommand({
+          url,
+          name,
+          outDir,
+          cwd: runtime.cwd,
+          headless: runtime.env.SKILLFORGE_HEADLESS === "1"
+        });
+        const output = [
+          `recorded ${result.eventCount} events, ${result.stepCount} steps`,
+          result.skillPath,
+          ...result.warnings.map((warning) => `warning: ${warning}`)
+        ].join("\n");
+        return { exitCode: 0, stdout: output, stderr: "" };
+      } catch (error) {
+        return { exitCode: 1, stdout: "", stderr: error instanceof Error ? error.message : String(error) };
+      }
     }
     case "replay": {
       const skill = rest[0];
